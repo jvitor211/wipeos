@@ -1,0 +1,114 @@
+project_name: wipeOs
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    main: ./main.go
+    binary: wipeOs
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - assets/*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: 'Bug fixes'
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: Others
+      order: 999
+
+brews:
+  - name: wipeOs
+    repository:
+      owner: joao-rrondon
+      name: homebrew-tools
+    folder: Formula
+    homepage: https://github.com/joao-rrondon/wipeOs
+    description: "🧹 Professional secure file wiping tool"
+    license: MIT
+    test: |
+      system "#{bin}/wipeOs --version"
+    install: |
+      bin.install "wipeOs"
+
+nfpms:
+  - file_name_template: '{{ .ConventionalFileName }}'
+    id: packages
+    homepage: https://github.com/joao-rrondon/wipeOs
+    description: |-
+      WipeOs is a modern, secure file wiping utility that permanently removes files 
+      and sensitive data from your system using military-grade overwriting techniques.
+    maintainer: João Rondon <joao.rrondon@example.com>
+    license: MIT
+    vendor: João Rondon
+    bindir: /usr/bin
+    section: utils
+    contents:
+      - src: ./assets/wipeOs.1
+        dst: /usr/share/man/man1/wipeOs.1
+        file_info:
+          mode: 0644
+    formats:
+      - apk
+      - deb
+      - rpm
+      - termux.deb
+      - archlinux
+
+publishers:
+  - name: fury.io
+    ids:
+      - packages
+    dir: "{{ dir .ArtifactPath }}"
+    cmd: curl -F package=@{{ .ArtifactName }} https://{{ .Env.FURY_TOKEN }}@push.fury.io/{{ .Env.FURY_USER }}/ 
